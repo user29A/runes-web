@@ -1,6 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import SequenceBuilder from "@/components/SequenceBuilder";
+import { RUNE_DESCRIPTIONS } from "@/lib/runeDescriptions";
+import { findMatchingRuneNames } from "@/lib/runeSearch";
+import { setDragPayload, type SequenceItem } from "@/lib/sequenceDrag";
 import {
   RUNES,
   type Rune,
@@ -14,36 +18,102 @@ export default function RunesApp() {
   const [runeText, setRuneText] = useState("");
   const [loadingText, setLoadingText] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isPlayingSequence, setIsPlayingSequence] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sequence, setSequence] = useState<SequenceItem[]>([]);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const sequenceAudioRef = useRef<HTMLAudioElement | null>(null);
+  const sequenceAbortRef = useRef(false);
+  const dragOccurredRef = useRef(false);
 
-  const stopAudio = useCallback(() => {
+  const matchingRuneNames = useMemo(
+    () => findMatchingRuneNames(searchQuery, RUNE_DESCRIPTIONS),
+    [searchQuery],
+  );
+
+  const isSearchActive = searchQuery.trim().length > 0;
+  const matchCount = matchingRuneNames.size;
+
+  const isRuneEnabled = useCallback(
+    (rune: Rune) => !isSearchActive || matchingRuneNames.has(rune.name),
+    [isSearchActive, matchingRuneNames],
+  );
+
+  const stopAllAudio = useCallback(() => {
+    sequenceAbortRef.current = true;
+
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
+      audioRef.current = null;
     }
+
+    if (sequenceAudioRef.current) {
+      sequenceAudioRef.current.pause();
+      sequenceAudioRef.current.currentTime = 0;
+      sequenceAudioRef.current = null;
+    }
+
     setIsPlaying(false);
+    setIsPlayingSequence(false);
   }, []);
+
+  const stopAudio = stopAllAudio;
 
   const playAudio = useCallback(() => {
     if (!selectedRune) return;
 
-    if (!audioRef.current) {
-      const audio = new Audio(getRuneAudioPath(selectedRune.name));
-      audio.onended = () => setIsPlaying(false);
-      audioRef.current = audio;
+    stopAllAudio();
+    sequenceAbortRef.current = false;
+
+    const audio = new Audio(getRuneAudioPath(selectedRune.name));
+    audio.onended = () => setIsPlaying(false);
+    audioRef.current = audio;
+    audio.currentTime = 0;
+    void audio.play().then(() => setIsPlaying(true));
+  }, [selectedRune, stopAllAudio]);
+
+  const playSequence = useCallback(async () => {
+    if (sequence.length === 0) return;
+
+    stopAllAudio();
+    sequenceAbortRef.current = false;
+    setIsPlayingSequence(true);
+
+    for (const item of sequence) {
+      if (sequenceAbortRef.current) break;
+
+      await new Promise<void>((resolve) => {
+        const audio = new Audio(getRuneAudioPath(item.rune.name));
+        sequenceAudioRef.current = audio;
+
+        audio.onended = () => resolve();
+        audio.onerror = () => resolve();
+        void audio.play().catch(() => resolve());
+      });
     }
 
-    audioRef.current.currentTime = 0;
-    void audioRef.current.play().then(() => setIsPlaying(true));
-  }, [selectedRune]);
+    sequenceAudioRef.current = null;
+    setIsPlayingSequence(false);
+  }, [sequence, stopAllAudio]);
 
   const selectRune = useCallback(
     async (rune: Rune) => {
-      stopAudio();
-      audioRef.current = null;
+      if (!isRuneEnabled(rune)) {
+        return;
+      }
+
+      stopAllAudio();
       setSelectedRune(rune);
       setLoadingText(true);
+
+      const cachedText = RUNE_DESCRIPTIONS[rune.name];
+      if (cachedText) {
+        setRuneText(cachedText);
+        setLoadingText(false);
+        return;
+      }
 
       try {
         const response = await fetch(getRuneTextPath(rune.name));
@@ -57,14 +127,19 @@ export default function RunesApp() {
         setLoadingText(false);
       }
     },
-    [stopAudio],
+    [isRuneEnabled, stopAllAudio],
   );
 
   useEffect(() => {
     return () => {
+      sequenceAbortRef.current = true;
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current = null;
+      }
+      if (sequenceAudioRef.current) {
+        sequenceAudioRef.current.pause();
+        sequenceAudioRef.current = null;
       }
     };
   }, []);
@@ -73,28 +148,85 @@ export default function RunesApp() {
     <div className="flex min-h-screen flex-col bg-slate-900 text-slate-200">
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-6">
         <section>
-          <h1 className="mb-4 text-2xl font-normal text-slate-100">Runes</h1>
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <h1 className="text-2xl font-normal text-slate-100">Runes</h1>
+            <div className="flex w-full flex-col gap-2 sm:max-w-sm">
+              <label htmlFor="rune-search" className="text-sm text-slate-400">
+                Search by concept
+              </label>
+              <div className="flex gap-2">
+                <input
+                  id="rune-search"
+                  type="search"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="e.g. wealth, protection, intelligence"
+                  className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-slate-400 focus:outline-none"
+                />
+                {isSearchActive && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="shrink-0 rounded-md border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 transition-colors hover:bg-slate-600"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              {isSearchActive && (
+                <p className="text-xs text-slate-400">
+                  {matchCount === 0
+                    ? "No runes match this search."
+                    : `${matchCount} rune${matchCount === 1 ? "" : "s"} match this search.`}
+                </p>
+              )}
+            </div>
+          </div>
+
           <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 md:grid-cols-8 md:gap-3">
             {RUNES.map((rune) => {
               const isSelected = selectedRune?.name === rune.name;
+              const isMatch = matchingRuneNames.has(rune.name);
+              const isDisabled = isSearchActive && !isMatch;
 
               return (
                 <button
                   key={rune.name}
                   type="button"
-                  onClick={() => void selectRune(rune)}
+                  draggable={!isDisabled}
+                  onDragStart={(event) => {
+                    if (isDisabled) return;
+                    dragOccurredRef.current = true;
+                    setDragPayload(event, { source: "grid", name: rune.name });
+                  }}
+                  onDragEnd={() => {
+                    window.setTimeout(() => {
+                      dragOccurredRef.current = false;
+                    }, 0);
+                  }}
+                  onClick={() => {
+                    if (dragOccurredRef.current) return;
+                    void selectRune(rune);
+                  }}
+                  disabled={isDisabled}
                   aria-pressed={isSelected}
+                  aria-disabled={isDisabled}
                   className={`flex flex-col items-center gap-1.5 rounded-md border p-2 transition-colors sm:p-2.5 ${
-                    isSelected
-                      ? "border-slate-400 bg-slate-700 ring-1 ring-slate-400"
-                      : "border-slate-700 bg-slate-800 hover:border-slate-500 hover:bg-slate-700"
-                  }`}
+                    isDisabled
+                      ? "cursor-not-allowed border-slate-800 bg-slate-900/60 opacity-35"
+                      : isSelected
+                        ? "border-slate-400 bg-slate-700 ring-1 ring-slate-400"
+                        : isSearchActive && isMatch
+                          ? "border-slate-500 bg-slate-800 ring-1 ring-slate-500/60 hover:bg-slate-700"
+                          : "border-slate-700 bg-slate-800 hover:border-slate-500 hover:bg-slate-700"
+                  } ${!isDisabled ? "cursor-grab active:cursor-grabbing" : ""}`}
                 >
                   <img
                     src={getRuneImagePath(rune)}
                     alt=""
                     width={40}
                     height={40}
+                    draggable={false}
                     className="h-8 w-8 object-contain sm:h-10 sm:w-10"
                   />
                   <span className="text-xs text-slate-300 sm:text-sm">
@@ -106,12 +238,22 @@ export default function RunesApp() {
           </div>
         </section>
 
+        <SequenceBuilder
+          sequence={sequence}
+          onSequenceChange={setSequence}
+          isRuneEnabled={isRuneEnabled}
+          isPlayingSequence={isPlayingSequence}
+          onPlaySequence={() => void playSequence()}
+          onStopSequence={stopAllAudio}
+        />
+
         <section className="min-h-[240px] flex-1">
           {!selectedRune ? (
             <div className="rounded-md border border-dashed border-slate-700 bg-slate-800/50 p-8 text-center">
               <p className="text-sm text-slate-400">
-                Select a rune above to view its description and play its
-                pronunciation.
+                {isSearchActive && matchCount === 0
+                  ? "Try a different concept, or clear the search to browse all runes."
+                  : "Select a rune above to view its description and play its pronunciation."}
               </p>
             </div>
           ) : (
@@ -131,7 +273,7 @@ export default function RunesApp() {
                   <button
                     type="button"
                     onClick={playAudio}
-                    disabled={isPlaying}
+                    disabled={isPlaying || isPlayingSequence}
                     className="rounded-md border border-slate-600 bg-slate-700 px-4 py-1.5 text-sm text-slate-100 transition-colors hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Play
@@ -139,7 +281,7 @@ export default function RunesApp() {
                   <button
                     type="button"
                     onClick={stopAudio}
-                    disabled={!isPlaying}
+                    disabled={!isPlaying && !isPlayingSequence}
                     className="rounded-md border border-slate-600 bg-slate-700 px-4 py-1.5 text-sm text-slate-100 transition-colors hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Stop
