@@ -1,0 +1,65 @@
+{
+  "name": "Untitled Project",
+  "tags": [
+    {
+      "name": "sound",
+      "sequenceOrder": 0,
+      "gridSlot": 0,
+      "useCustomChunking": false,
+      "customChunking": {
+        "enabled": true,
+        "minChunkSeconds": 1,
+        "maxChunkSeconds": 5,
+        "randomSeed": 0,
+        "useRandomSeed": false
+      },
+      "includeInAudioMix": true,
+      "audioVolume": 1
+    }
+  ],
+  "clips": [
+    {
+      "id": "32259c2b-39a5-4b71-b9f6-0710f2aa9be1",
+      "sourcePath": "C:\\Projects\\runes-web\\public\\runes\\audio\\Uuinne.mp3",
+      "sourceFileName": "Uuinne.mp3",
+      "startSeconds": 10.196,
+      "endSeconds": 31.052,
+      "tagName": "sound",
+      "durationSeconds": 20.856,
+      "rangeDisplay": "0:10.19 \u2013 0:31.05 (20.9s)"
+    }
+  ],
+  "sourcePaths": [
+    "C:\\Projects\\runes-web\\public\\runes\\audio\\Uuinne.mp3"
+  ],
+  "export": {
+    "mode": "sequentialFullFrame",
+    "layout": "twoByOne",
+    "resolution": "fullHd1K",
+    "frameFit": "fit",
+    "removeSourceLetterboxing": false,
+    "outputWidth": 1920,
+    "outputHeight": 1080,
+    "targetDurationSeconds": 0,
+    "hardwareAcceleration": "cpuMultiCore",
+    "chunking": {
+      "enabled": false,
+      "minChunkSeconds": 1,
+      "maxChunkSeconds": 5,
+      "randomSeed": 0,
+      "useRandomSeed": false
+    },
+    "audioMix": "sequentialFollowVideo",
+    "audioOverlay": {
+      "enabled": false,
+      "filePath": null,
+      "behavior": "mixWithSource",
+      "volume": 1,
+      "loopToFit": true
+    },
+    "previewDurationSeconds": 15
+  },
+  "lastOpenedVideoPath": "C:\\Projects\\runes-web\\public\\runes\\audio\\Uuinne.mp3",
+  "ffmpegPath": null,
+  "outputDirectory": "C:\\Projects\\runes-web\\public\\runes\\audio"
+}

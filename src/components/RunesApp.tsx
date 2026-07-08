@@ -5,6 +5,7 @@ import SequenceBuilder from "@/components/SequenceBuilder";
 import { RUNE_DESCRIPTIONS } from "@/lib/runeDescriptions";
 import { findMatchingRuneNames } from "@/lib/runeSearch";
 import { setDragPayload, type SequenceItem } from "@/lib/sequenceDrag";
+import { playAudioClip, resolveSequenceAudioPath } from "@/lib/runeAudio";
 import {
   RUNES,
   type Rune,
@@ -84,13 +85,10 @@ export default function RunesApp() {
     for (const item of sequence) {
       if (sequenceAbortRef.current) break;
 
-      await new Promise<void>((resolve) => {
-        const audio = new Audio(getRuneAudioPath(item.rune.name));
-        sequenceAudioRef.current = audio;
+      const audioUrl = await resolveSequenceAudioPath(item.rune.name);
 
-        audio.onended = () => resolve();
-        audio.onerror = () => resolve();
-        void audio.play().catch(() => resolve());
+      await new Promise<void>((resolve) => {
+        sequenceAudioRef.current = playAudioClip(audioUrl, resolve);
       });
     }
 
