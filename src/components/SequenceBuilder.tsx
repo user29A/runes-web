@@ -16,8 +16,10 @@ type SequenceBuilderProps = {
   onSequenceChange: (sequence: SequenceItem[]) => void;
   isRuneEnabled: (rune: Rune) => boolean;
   isPlayingSequence: boolean;
+  isSavingSequence: boolean;
   onPlaySequence: () => void;
   onStopSequence: () => void;
+  onSaveSequence: () => void;
 };
 
 function getRuneByName(name: string): Rune | undefined {
@@ -29,8 +31,10 @@ export default function SequenceBuilder({
   onSequenceChange,
   isRuneEnabled,
   isPlayingSequence,
+  isSavingSequence,
   onPlaySequence,
   onStopSequence,
+  onSaveSequence,
 }: SequenceBuilderProps) {
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
@@ -96,8 +100,18 @@ export default function SequenceBuilder({
           </button>
           <button
             type="button"
+            onClick={onSaveSequence}
+            disabled={
+              sequence.length === 0 || isPlayingSequence || isSavingSequence
+            }
+            className="rounded-md border border-slate-600 bg-slate-700 px-4 py-1.5 text-sm text-slate-100 transition-colors hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isSavingSequence ? "Saving..." : "Save as MP3"}
+          </button>
+          <button
+            type="button"
             onClick={handleClear}
-            disabled={sequence.length === 0}
+            disabled={sequence.length === 0 || isSavingSequence}
             className="rounded-md border border-slate-600 bg-slate-700 px-4 py-1.5 text-sm text-slate-100 transition-colors hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Clear

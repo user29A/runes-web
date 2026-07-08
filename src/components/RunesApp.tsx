@@ -5,7 +5,11 @@ import SequenceBuilder from "@/components/SequenceBuilder";
 import { RUNE_DESCRIPTIONS } from "@/lib/runeDescriptions";
 import { findMatchingRuneNames } from "@/lib/runeSearch";
 import { setDragPayload, type SequenceItem } from "@/lib/sequenceDrag";
-import { playAudioClip, resolveSequenceAudioPath } from "@/lib/runeAudio";
+import {
+  playAudioClip,
+  resolveSequenceAudioPath,
+  saveSequenceMp3,
+} from "@/lib/runeAudio";
 import {
   RUNES,
   type Rune,
@@ -20,6 +24,7 @@ export default function RunesApp() {
   const [loadingText, setLoadingText] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPlayingSequence, setIsPlayingSequence] = useState(false);
+  const [isSavingSequence, setIsSavingSequence] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [sequence, setSequence] = useState<SequenceItem[]>([]);
 
@@ -74,6 +79,21 @@ export default function RunesApp() {
     audio.currentTime = 0;
     void audio.play().then(() => setIsPlaying(true));
   }, [selectedRune, stopAllAudio]);
+
+  const saveSequence = useCallback(async () => {
+    if (sequence.length === 0 || isSavingSequence) return;
+
+    setIsSavingSequence(true);
+
+    try {
+      const runeNames = sequence.map((item) => item.rune.name);
+      await saveSequenceMp3(runeNames);
+    } catch {
+      window.alert("Unable to save the sequence. Please try again.");
+    } finally {
+      setIsSavingSequence(false);
+    }
+  }, [sequence, isSavingSequence]);
 
   const playSequence = useCallback(async () => {
     if (sequence.length === 0) return;
@@ -241,8 +261,10 @@ export default function RunesApp() {
           onSequenceChange={setSequence}
           isRuneEnabled={isRuneEnabled}
           isPlayingSequence={isPlayingSequence}
+          isSavingSequence={isSavingSequence}
           onPlaySequence={() => void playSequence()}
           onStopSequence={stopAllAudio}
+          onSaveSequence={() => void saveSequence()}
         />
 
         <section className="min-h-[240px] flex-1">
