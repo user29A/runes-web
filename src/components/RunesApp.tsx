@@ -10,6 +10,7 @@ import {
   resolveSequenceAudioPath,
   saveSequenceMp3,
 } from "@/lib/runeAudio";
+import { saveSequenceImage } from "@/lib/sequenceImage";
 import {
   RUNES,
   type Rune,
@@ -25,6 +26,7 @@ export default function RunesApp() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPlayingSequence, setIsPlayingSequence] = useState(false);
   const [isSavingSequence, setIsSavingSequence] = useState(false);
+  const [isSavingCompositeImage, setIsSavingCompositeImage] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [sequence, setSequence] = useState<SequenceItem[]>([]);
 
@@ -79,6 +81,24 @@ export default function RunesApp() {
     audio.currentTime = 0;
     void audio.play().then(() => setIsPlaying(true));
   }, [selectedRune, stopAllAudio]);
+
+  const saveCompositeImage = useCallback(
+    async (blob: Blob) => {
+      if (sequence.length === 0 || isSavingCompositeImage) return;
+
+      setIsSavingCompositeImage(true);
+
+      try {
+        const runeNames = sequence.map((item) => item.rune.name);
+        await saveSequenceImage(runeNames, blob);
+      } catch {
+        window.alert("Unable to save the composite image. Please try again.");
+      } finally {
+        setIsSavingCompositeImage(false);
+      }
+    },
+    [sequence, isSavingCompositeImage],
+  );
 
   const saveSequence = useCallback(async () => {
     if (sequence.length === 0 || isSavingSequence) return;
@@ -262,9 +282,11 @@ export default function RunesApp() {
           isRuneEnabled={isRuneEnabled}
           isPlayingSequence={isPlayingSequence}
           isSavingSequence={isSavingSequence}
+          isSavingCompositeImage={isSavingCompositeImage}
           onPlaySequence={() => void playSequence()}
           onStopSequence={stopAllAudio}
           onSaveSequence={() => void saveSequence()}
+          onSaveCompositeImage={(blob) => void saveCompositeImage(blob)}
         />
 
         <section className="min-h-[240px] flex-1">

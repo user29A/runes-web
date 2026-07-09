@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { buildSequenceImage } from "@/lib/sequenceImage";
 import {
   insertSequenceItem,
   moveSequenceItem,
@@ -17,9 +18,11 @@ type SequenceBuilderProps = {
   isRuneEnabled: (rune: Rune) => boolean;
   isPlayingSequence: boolean;
   isSavingSequence: boolean;
+  isSavingCompositeImage: boolean;
   onPlaySequence: () => void;
   onStopSequence: () => void;
   onSaveSequence: () => void;
+  onSaveCompositeImage: (blob: Blob) => void;
 };
 
 function getRuneByName(name: string): Rune | undefined {
@@ -32,11 +35,59 @@ export default function SequenceBuilder({
   isRuneEnabled,
   isPlayingSequence,
   isSavingSequence,
+  isSavingCompositeImage,
   onPlaySequence,
   onStopSequence,
   onSaveSequence,
+  onSaveCompositeImage,
 }: SequenceBuilderProps) {
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [compositePreview, setCompositePreview] = useState<string | null>(null);
+  const [isBuildingComposite, setIsBuildingComposite] = useState(false);
+  const compositeBlobRef = useRef<Blob | null>(null);
+
+  useEffect(() => {
+    if (sequence.length === 0) {
+      setCompositePreview(null);
+      compositeBlobRef.current = null;
+      setIsBuildingComposite(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsBuildingComposite(true);
+
+    void buildSequenceImage(sequence.map((item) => item.rune))
+      .then((result) => {
+        if (cancelled) {
+          return;
+        }
+
+        if (result) {
+          setCompositePreview(result.dataUrl);
+          compositeBlobRef.current = result.blob;
+          return;
+        }
+
+        setCompositePreview(null);
+        compositeBlobRef.current = null;
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCompositePreview(null);
+          compositeBlobRef.current = null;
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsBuildingComposite(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sequence]);
 
   const handleDragOver = (event: React.DragEvent) => {
     event.preventDefault();
@@ -102,7 +153,10 @@ export default function SequenceBuilder({
             type="button"
             onClick={onSaveSequence}
             disabled={
-              sequence.length === 0 || isPlayingSequence || isSavingSequence
+              sequence.length === 0 ||
+              isPlayingSequence ||
+              isSavingSequence ||
+              isSavingCompositeImage
             }
             className="rounded-md border border-slate-600 bg-slate-700 px-4 py-1.5 text-sm text-slate-100 transition-colors hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -110,8 +164,32 @@ export default function SequenceBuilder({
           </button>
           <button
             type="button"
+            onClick={() => {
+              const blob = compositeBlobRef.current;
+              if (blob) {
+                onSaveCompositeImage(blob);
+              }
+            }}
+            disabled={
+              sequence.length === 0 ||
+              isPlayingSequence ||
+              isSavingSequence ||
+              isSavingCompositeImage ||
+              isBuildingComposite ||
+              !compositePreview
+            }
+            className="rounded-md border border-slate-600 bg-slate-700 px-4 py-1.5 text-sm text-slate-100 transition-colors hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isSavingCompositeImage ? "Saving..." : "Save as JPG"}
+          </button>
+          <button
+            type="button"
             onClick={handleClear}
-            disabled={sequence.length === 0 || isSavingSequence}
+            disabled={
+              sequence.length === 0 ||
+              isSavingSequence ||
+              isSavingCompositeImage
+            }
             className="rounded-md border border-slate-600 bg-slate-700 px-4 py-1.5 text-sm text-slate-100 transition-colors hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Clear
@@ -212,6 +290,32 @@ export default function SequenceBuilder({
           </div>
         )}
       </div>
+
+      {sequence.length > 0 && (
+        <div className="mt-4 rounded-md border border-slate-600 bg-slate-900/40 p-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm text-slate-300">Composite Image</h3>
+            <p className="text-xs text-slate-500">
+              Runes are extracted and joined in your sequence order.
+            </p>
+          </div>
+          {isBuildingComposite ? (
+            <p className="text-sm text-slate-500">Building preview...</p>
+          ) : compositePreview ? (
+            <div className="overflow-x-auto rounded-md border border-slate-700 bg-black p-3">
+              <img
+                src={compositePreview}
+                alt={`Composite rune sequence: ${sequenceLabel}`}
+                className="mx-auto max-h-40 w-auto object-contain"
+              />
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">
+              Unable to build composite image.
+            </p>
+          )}
+        </div>
+      )}
     </section>
   );
 }
